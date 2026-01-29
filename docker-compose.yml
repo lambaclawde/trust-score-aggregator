@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - RPC_URL=${RPC_URL}
+      - DATABASE_URL=sqlite:///data/trust_scores.db
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  indexer:
+    build: .
+    command: python scripts/start_indexer.py
+    environment:
+      - RPC_URL=${RPC_URL}
+      - DATABASE_URL=sqlite:///data/trust_scores.db
+      - IDENTITY_REGISTRY=${IDENTITY_REGISTRY}
+      - REPUTATION_REGISTRY=${REPUTATION_REGISTRY}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  oracle-updater:
+    build: .
+    command: python -m oracle_updater.main --daemon 6
+    environment:
+      - RPC_URL=${RPC_URL}
+      - DATABASE_URL=sqlite:///data/trust_scores.db
+      - ORACLE_CONTRACT=${ORACLE_CONTRACT}
+      - ORACLE_OWNER_KEY=${ORACLE_OWNER_KEY}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    depends_on:
+      - indexer
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://api:8000/v1
+    depends_on:
+      - api
+
+volumes:
+  data:
