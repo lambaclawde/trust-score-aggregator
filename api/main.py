@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .middleware.rate_limit import limiter
-from .routes import health_router, agents_router, scores_router
+from .routes import health_router, agents_router, scores_router, badge_router
 from indexer.models.database import init_db
 
 
@@ -57,6 +57,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 app.include_router(health_router)
 app.include_router(agents_router)
 app.include_router(scores_router)
+app.include_router(badge_router)
 
 
 def run():
