@@ -32,14 +32,14 @@ class IndexerConfig:
     batch_size: int = int(os.getenv("INDEXER_BATCH_SIZE", "1000"))
 
 
-# Contract ABIs (minimal required events)
+# Contract ABIs (minimal required events) - matches ERC-8004 official contracts
 IDENTITY_REGISTRY_ABI = [
     {
         "anonymous": False,
         "inputs": [
-            {"indexed": True, "name": "id", "type": "bytes32"},
+            {"indexed": True, "name": "agentId", "type": "uint256"},
+            {"indexed": False, "name": "agentURI", "type": "string"},
             {"indexed": True, "name": "owner", "type": "address"},
-            {"indexed": False, "name": "metadataURI", "type": "string"},
         ],
         "name": "Registered",
         "type": "event",
@@ -47,10 +47,10 @@ IDENTITY_REGISTRY_ABI = [
     {
         "anonymous": False,
         "inputs": [
-            {"indexed": True, "name": "id", "type": "bytes32"},
-            {"indexed": False, "name": "metadataURI", "type": "string"},
+            {"indexed": True, "name": "agentId", "type": "uint256"},
+            {"indexed": False, "name": "agentURI", "type": "string"},
         ],
-        "name": "MetadataUpdated",
+        "name": "AgentURIUpdated",
         "type": "event",
     },
 ]
@@ -59,15 +59,17 @@ REPUTATION_REGISTRY_ABI = [
     {
         "anonymous": False,
         "inputs": [
-            {"indexed": True, "name": "feedbackId", "type": "bytes32"},
-            {"indexed": True, "name": "subject", "type": "bytes32"},
-            {"indexed": True, "name": "author", "type": "bytes32"},
-            {"indexed": False, "name": "tag1", "type": "bytes32"},
-            {"indexed": False, "name": "tag2", "type": "bytes32"},
-            {"indexed": False, "name": "tag3", "type": "bytes32"},
-            {"indexed": False, "name": "value", "type": "int256"},
+            {"indexed": True, "name": "agentId", "type": "uint256"},
+            {"indexed": True, "name": "clientAddress", "type": "address"},
+            {"indexed": False, "name": "feedbackIndex", "type": "uint64"},
+            {"indexed": False, "name": "value", "type": "int128"},
             {"indexed": False, "name": "valueDecimals", "type": "uint8"},
-            {"indexed": False, "name": "comment", "type": "string"},
+            {"indexed": True, "name": "indexedTag1", "type": "string"},
+            {"indexed": False, "name": "tag1", "type": "string"},
+            {"indexed": False, "name": "tag2", "type": "string"},
+            {"indexed": False, "name": "endpoint", "type": "string"},
+            {"indexed": False, "name": "feedbackURI", "type": "string"},
+            {"indexed": False, "name": "feedbackHash", "type": "bytes32"},
         ],
         "name": "NewFeedback",
         "type": "event",
@@ -75,7 +77,9 @@ REPUTATION_REGISTRY_ABI = [
     {
         "anonymous": False,
         "inputs": [
-            {"indexed": True, "name": "feedbackId", "type": "bytes32"},
+            {"indexed": True, "name": "agentId", "type": "uint256"},
+            {"indexed": True, "name": "clientAddress", "type": "address"},
+            {"indexed": True, "name": "feedbackIndex", "type": "uint64"},
         ],
         "name": "FeedbackRevoked",
         "type": "event",

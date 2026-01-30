@@ -75,10 +75,7 @@ async def get_agent(request: Request, agent_id: str):
     session = get_session(engine)
 
     try:
-        # Normalize ID format
-        if not agent_id.startswith("0x"):
-            agent_id = "0x" + agent_id
-
+        # Agent IDs are stored as plain integers (e.g., "0", "1", "2")
         agent = session.query(Agent).filter_by(id=agent_id).first()
 
         if not agent:
@@ -109,10 +106,7 @@ async def get_agent_feedback(
     session = get_session(engine)
 
     try:
-        # Normalize ID format
-        if not agent_id.startswith("0x"):
-            agent_id = "0x" + agent_id
-
+        # Agent IDs are stored as plain integers
         query = session.query(Feedback).filter(Feedback.subject == agent_id)
 
         if not include_revoked:

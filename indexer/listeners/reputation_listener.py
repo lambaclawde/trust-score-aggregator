@@ -31,9 +31,11 @@ class ReputationListener:
         """Process a NewFeedback event."""
         args = event["args"]
 
-        feedback_id = bytes32_to_hex(args["feedbackId"])
-        subject = bytes32_to_hex(args["subject"])
-        author = bytes32_to_hex(args["author"])
+        # Create unique feedback ID from agentId + clientAddress + feedbackIndex
+        agent_id = str(args["agentId"])
+        client_address = args["clientAddress"]
+        feedback_index = args["feedbackIndex"]
+        feedback_id = f"{agent_id}-{client_address}-{feedback_index}"
 
         # Get block timestamp
         block = self.w3.eth.get_block(event["blockNumber"])
@@ -41,14 +43,14 @@ class ReputationListener:
 
         feedback = Feedback(
             id=feedback_id,
-            subject=subject,
-            author=author,
-            tag1=bytes32_to_hex(args.get("tag1", b"\x00" * 32)) if args.get("tag1") else None,
-            tag2=bytes32_to_hex(args.get("tag2", b"\x00" * 32)) if args.get("tag2") else None,
-            tag3=bytes32_to_hex(args.get("tag3", b"\x00" * 32)) if args.get("tag3") else None,
+            subject=agent_id,
+            author=client_address,
+            tag1=args.get("tag1", ""),
+            tag2=args.get("tag2", ""),
+            tag3=args.get("endpoint", ""),  # Store endpoint in tag3
             value=args["value"],
             value_decimals=args.get("valueDecimals", 0),
-            comment=args.get("comment", ""),
+            comment=args.get("feedbackURI", ""),  # Store feedbackURI in comment
             revoked=False,
             block_number=event["blockNumber"],
             tx_hash=bytes32_to_hex(event["transactionHash"]),
@@ -63,7 +65,7 @@ class ReputationListener:
             else:
                 session.add(feedback)
                 logger.info(
-                    f"New feedback: {feedback_id} for subject {subject} value={args['value']}"
+                    f"New feedback for agent {agent_id} from {client_address[:10]}... value={args['value']}"
                 )
             session.commit()
         except Exception as e:
@@ -78,7 +80,11 @@ class ReputationListener:
     def process_feedback_revoked_event(self, event):
         """Process a FeedbackRevoked event."""
         args = event["args"]
-        feedback_id = bytes32_to_hex(args["feedbackId"])
+        # Reconstruct feedback ID from components
+        agent_id = str(args["agentId"])
+        client_address = args["clientAddress"]
+        feedback_index = args["feedbackIndex"]
+        feedback_id = f"{agent_id}-{client_address}-{feedback_index}"
 
         session = get_session(self.engine)
         try:
@@ -100,12 +106,12 @@ class ReputationListener:
         """Fetch and process events in a block range."""
         count = 0
 
-        # Fetch NewFeedback events
+        # Fetch NewFeedback events using get_logs
         try:
-            feedback_filter = self.contract.events.NewFeedback.create_filter(
-                fromBlock=from_block, toBlock=to_block
+            events = self.contract.events.NewFeedback.get_logs(
+                from_block=from_block, to_block=to_block
             )
-            for event in feedback_filter.get_all_entries():
+            for event in events:
                 self.process_new_feedback_event(event)
                 count += 1
         except Exception as e:
@@ -113,10 +119,10 @@ class ReputationListener:
 
         # Fetch FeedbackRevoked events
         try:
-            revoked_filter = self.contract.events.FeedbackRevoked.create_filter(
-                fromBlock=from_block, toBlock=to_block
+            events = self.contract.events.FeedbackRevoked.get_logs(
+                from_block=from_block, to_block=to_block
             )
-            for event in revoked_filter.get_all_entries():
+            for event in events:
                 self.process_feedback_revoked_event(event)
                 count += 1
         except Exception as e:
