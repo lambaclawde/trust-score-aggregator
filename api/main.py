@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 from .config import settings
 from .middleware.rate_limit import limiter
 from .routes import health_router, agents_router, scores_router, badge_router, premium_router
+from .payments.models import init_payment_db
 from indexer.models.database import init_db
 
 # Configure logging
@@ -29,9 +30,10 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.environment}")
     logger.info(f"Chain ID: {settings.chain_id}")
 
-    # Initialize database on startup
+    # Initialize databases on startup
     init_db(settings.database_url)
-    logger.info("Database initialized")
+    init_payment_db(settings.database_url)
+    logger.info("Database initialized (trust scores + payments)")
 
     yield
 

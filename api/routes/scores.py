@@ -212,3 +212,57 @@ async def refresh_score(request: Request, agent_id: str):
         raise HTTPException(status_code=404, detail="No feedback found for agent")
 
     return computed_to_schema(computed)
+
+
+class LeaderboardAgent(BaseModel):
+    """Leaderboard agent entry."""
+    agent_id: str
+    overall_score: float
+    feedback_count: int
+    positive_count: int
+    negative_count: int
+
+
+class LeaderboardResponse(BaseModel):
+    """Leaderboard response."""
+    agents: list[LeaderboardAgent]
+    total: int
+
+
+@router.get("/leaderboard", response_model=LeaderboardResponse)
+@limiter.limit(FREE_LIMIT)
+async def get_leaderboard(
+    request: Request,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    """
+    Get agent leaderboard (free tier).
+
+    Returns top agents ranked by trust score.
+    For detailed analytics, use the premium leaderboard endpoint.
+    """
+    engine = get_db_engine()
+    session = get_session(engine)
+
+    try:
+        from sqlalchemy import desc
+
+        query = session.query(ComputedScore).order_by(desc(ComputedScore.overall_score))
+        total = query.count()
+        results = query.offset(offset).limit(limit).all()
+
+        agents = [
+            LeaderboardAgent(
+                agent_id=c.agent_id,
+                overall_score=c.overall_score,
+                feedback_count=c.feedback_count,
+                positive_count=c.positive_count,
+                negative_count=c.negative_count,
+            )
+            for c in results
+        ]
+
+        return LeaderboardResponse(agents=agents, total=total)
+    finally:
+        session.close()
