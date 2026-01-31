@@ -1,10 +1,11 @@
-"""Agent endpoints."""
+"""Agent endpoints - Production Ready."""
 
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ..middleware.rate_limit import limiter, FREE_LIMIT
+from ..utils.validation import validate_ethereum_address, validate_agent_id
 from indexer.models.database import Agent, Feedback, get_session, get_engine
 from indexer.models.schemas import AgentSchema, FeedbackSchema
 from ..config import settings
@@ -24,11 +25,47 @@ def get_db_engine():
 
 class AgentListResponse(BaseModel):
     """Agent list response."""
-
     agents: list[AgentSchema]
     total: int
     page: int
     page_size: int
+
+
+class AgentStatsResponse(BaseModel):
+    """Global agent statistics."""
+    total_agents: int
+    total_feedback: int
+    agents_with_feedback: int
+    chain_id: int
+
+
+@router.get("/stats", response_model=AgentStatsResponse)
+@limiter.limit(FREE_LIMIT)
+async def get_stats(request: Request):
+    """Get global agent statistics."""
+    engine = get_db_engine()
+    session = get_session(engine)
+
+    try:
+        total_agents = session.query(Agent).count()
+        total_feedback = session.query(Feedback).filter(Feedback.revoked == False).count()
+
+        # Count agents with at least one feedback
+        from sqlalchemy import func
+        agents_with_feedback = (
+            session.query(func.count(func.distinct(Feedback.subject)))
+            .filter(Feedback.revoked == False)
+            .scalar()
+        )
+
+        return AgentStatsResponse(
+            total_agents=total_agents,
+            total_feedback=total_feedback,
+            agents_with_feedback=agents_with_feedback or 0,
+            chain_id=settings.chain_id,
+        )
+    finally:
+        session.close()
 
 
 @router.get("", response_model=AgentListResponse)
@@ -47,7 +84,9 @@ async def list_agents(
         query = session.query(Agent)
 
         if owner:
-            query = query.filter(Agent.owner == owner)
+            # Validate owner address format
+            validated_owner = validate_ethereum_address(owner)
+            query = query.filter(Agent.owner.ilike(validated_owner))
 
         total = query.count()
         agents = (
@@ -71,12 +110,14 @@ async def list_agents(
 @limiter.limit(FREE_LIMIT)
 async def get_agent(request: Request, agent_id: str):
     """Get agent by ID."""
+    # Validate agent ID
+    validated_id = validate_agent_id(agent_id)
+
     engine = get_db_engine()
     session = get_session(engine)
 
     try:
-        # Agent IDs are stored as plain integers (e.g., "0", "1", "2")
-        agent = session.query(Agent).filter_by(id=agent_id).first()
+        agent = session.query(Agent).filter_by(id=validated_id).first()
 
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
@@ -88,7 +129,6 @@ async def get_agent(request: Request, agent_id: str):
 
 class FeedbackListResponse(BaseModel):
     """Feedback list response."""
-
     feedback: list[FeedbackSchema]
     total: int
 
@@ -102,12 +142,14 @@ async def get_agent_feedback(
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get feedback for an agent."""
+    # Validate agent ID
+    validated_id = validate_agent_id(agent_id)
+
     engine = get_db_engine()
     session = get_session(engine)
 
     try:
-        # Agent IDs are stored as plain integers
-        query = session.query(Feedback).filter(Feedback.subject == agent_id)
+        query = session.query(Feedback).filter(Feedback.subject == validated_id)
 
         if not include_revoked:
             query = query.filter(Feedback.revoked == False)

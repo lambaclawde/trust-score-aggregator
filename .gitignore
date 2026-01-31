@@ -10,14 +10,33 @@ venv/
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Environment
+# Environment - CRITICAL: Never commit secrets
 .env
-.env.local
+.env.*
+!.env.example
+*.env
+.envrc
+
+# Secrets and keys - CRITICAL
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+credentials/
+*_key.json
+*_credentials.json
 
 # Database
 *.db
+*.sqlite
+*.sqlite3
 data/*.db
+data/
 
 # Node
 node_modules/
@@ -43,3 +62,14 @@ logs/
 # Private scoring (closed source)
 scoring/premium/*.py
 !scoring/premium/.gitkeep
+!scoring/premium/__init__.py
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Temporary files
+tmp/
+temp/
+.tmp/

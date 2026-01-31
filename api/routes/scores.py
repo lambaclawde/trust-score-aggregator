@@ -1,16 +1,19 @@
-"""Score endpoints."""
+"""Score endpoints - Production Ready."""
 
 import json
+import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ..middleware.rate_limit import limiter, FREE_LIMIT, BASIC_LIMIT
+from ..utils.validation import validate_agent_id
 from indexer.models.database import ComputedScore, get_session, get_engine
 from indexer.models.schemas import ScoreSchema, CategoryScore
 from scoring import TrustScoreAggregator
 from ..config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1", tags=["scores"])
 
 # Lazy engine initialization
@@ -68,18 +71,19 @@ async def get_score(request: Request, agent_id: str):
 
     Returns basic score without category breakdown.
     """
+    # Validate agent ID
+    validated_id = validate_agent_id(agent_id)
+
     engine = get_db_engine()
     session = get_session(engine)
 
     try:
-        # Agent IDs are plain integers
-
-        computed = session.query(ComputedScore).filter_by(agent_id=agent_id).first()
+        computed = session.query(ComputedScore).filter_by(agent_id=validated_id).first()
 
         if not computed:
             # Try to compute on-demand
             aggregator = TrustScoreAggregator(engine)
-            computed = aggregator.compute_and_save(agent_id)
+            computed = aggregator.compute_and_save(validated_id)
 
             if not computed:
                 raise HTTPException(
@@ -103,17 +107,18 @@ async def get_full_score(request: Request, agent_id: str):
 
     Requires API key with Basic or Premium plan.
     """
+    # Validate agent ID
+    validated_id = validate_agent_id(agent_id)
+
     engine = get_db_engine()
     session = get_session(engine)
 
     try:
-        # Agent IDs are plain integers
-
-        computed = session.query(ComputedScore).filter_by(agent_id=agent_id).first()
+        computed = session.query(ComputedScore).filter_by(agent_id=validated_id).first()
 
         if not computed:
             aggregator = TrustScoreAggregator(engine)
-            computed = aggregator.compute_and_save(agent_id)
+            computed = aggregator.compute_and_save(validated_id)
 
             if not computed:
                 raise HTTPException(
@@ -160,12 +165,15 @@ async def get_batch_scores(request: Request, body: BatchScoreRequest):
         not_found = []
 
         for agent_id in body.agent_ids:
-            # Normalize ID format
-            if not agent_id.startswith("0x"):
-                agent_id = "0x" + agent_id
+            # Validate each agent ID
+            try:
+                validated_id = validate_agent_id(agent_id)
+            except HTTPException:
+                not_found.append(agent_id)
+                continue
 
             computed = (
-                session.query(ComputedScore).filter_by(agent_id=agent_id).first()
+                session.query(ComputedScore).filter_by(agent_id=validated_id).first()
             )
 
             if computed:
@@ -192,14 +200,13 @@ async def refresh_score(request: Request, agent_id: str):
 
     Useful after new feedback is added.
     """
+    # Validate agent ID
+    validated_id = validate_agent_id(agent_id)
+
     engine = get_db_engine()
 
-    # Normalize ID format
-    if not agent_id.startswith("0x"):
-        agent_id = "0x" + agent_id
-
     aggregator = TrustScoreAggregator(engine)
-    computed = aggregator.compute_and_save(agent_id)
+    computed = aggregator.compute_and_save(validated_id)
 
     if not computed:
         raise HTTPException(status_code=404, detail="No feedback found for agent")

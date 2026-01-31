@@ -127,6 +127,11 @@ class EventIndexer:
                     last_block = to_block
                     self.set_last_indexed_block(last_block)
 
+                    # Log progress every 100 batches
+                    blocks_behind = current_block - last_block
+                    if blocks_behind > 0 and (last_block % (config.batch_size * 100) == 0 or blocks_behind < 100):
+                        logger.info(f"Progress: block {last_block}/{current_block} ({blocks_behind} blocks behind)")
+
                 else:
                     # Wait for new blocks
                     await asyncio.sleep(config.poll_interval)

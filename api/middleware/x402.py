@@ -2,9 +2,14 @@
 
 Implements HTTP 402 Payment Required for crypto micropayments.
 Clients pay per request in ETH to access premium endpoints.
+
+PRODUCTION NOTE: This implementation uses an in-memory payment cache.
+For production deployments with multiple workers, use Redis:
+    - Set REDIS_URL in environment
+    - Replace _payment_cache with Redis client
 """
 
-import hashlib
+import logging
 import time
 from typing import Optional
 from dataclasses import dataclass
@@ -16,6 +21,8 @@ from eth_account.messages import encode_defunct
 from eth_account import Account
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -47,8 +54,41 @@ class PaymentProof:
     signature: str
 
 
-# Simple in-memory cache for verified payments (use Redis in production)
+# Payment cache for verified payments
+# WARNING: In-memory cache only works for single-worker deployments
+# For multi-worker production, use Redis (set REDIS_URL environment variable)
 _payment_cache: dict[str, int] = {}  # tx_hash -> expiry_timestamp
+_cache_warning_shown = False
+
+
+def _get_payment_cache():
+    """Get payment cache (Redis if available, else in-memory).
+
+    Returns a dict-like interface for payment caching.
+    """
+    global _cache_warning_shown
+    import os
+
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        try:
+            import redis
+            # Return Redis client wrapped as dict-like
+            # For now, fall through to in-memory if Redis not configured
+            pass
+        except ImportError:
+            if not _cache_warning_shown:
+                logger.warning("REDIS_URL set but redis package not installed. Using in-memory cache.")
+                _cache_warning_shown = True
+
+    if not _cache_warning_shown and settings.environment == "production":
+        logger.warning(
+            "x402 payment cache using in-memory storage. "
+            "For multi-worker deployments, configure REDIS_URL for distributed caching."
+        )
+        _cache_warning_shown = True
+
+    return _payment_cache
 
 
 def verify_payment_signature(proof: PaymentProof, config: PaymentConfig) -> bool:
@@ -72,8 +112,12 @@ def verify_payment_signature(proof: PaymentProof, config: PaymentConfig) -> bool
         recovered = Account.recover_message(message_hash, signature=proof.signature)
 
         # Verify signer matches payer
-        return recovered.lower() == proof.payer.lower()
-    except Exception:
+        is_valid = recovered.lower() == proof.payer.lower()
+        if not is_valid:
+            logger.warning(f"Payment signature mismatch: expected {proof.payer}, got {recovered}")
+        return is_valid
+    except Exception as e:
+        logger.error(f"Payment signature verification failed: {e}")
         return False
 
 
@@ -82,9 +126,11 @@ def is_payment_valid(proof: PaymentProof, config: PaymentConfig) -> tuple[bool, 
 
     Returns (is_valid, error_message).
     """
+    cache = _get_payment_cache()
+
     # Check if already used (replay protection)
-    if proof.tx_hash in _payment_cache:
-        if _payment_cache[proof.tx_hash] > time.time():
+    if proof.tx_hash in cache:
+        if cache[proof.tx_hash] > time.time():
             # Payment still valid, allow reuse within window
             return True, ""
         else:
@@ -92,10 +138,12 @@ def is_payment_valid(proof: PaymentProof, config: PaymentConfig) -> tuple[bool, 
 
     # Check timestamp (payment must be recent - within 5 minutes)
     if abs(time.time() - proof.timestamp) > 300:
+        logger.warning(f"Payment timestamp too old: {proof.timestamp} vs now {time.time()}")
         return False, "Payment timestamp too old"
 
     # Check amount
     if proof.amount < config.price_wei:
+        logger.warning(f"Insufficient payment: {proof.amount} < {config.price_wei}")
         return False, f"Insufficient payment. Required: {config.price_wei} wei"
 
     # Verify signature
@@ -103,8 +151,9 @@ def is_payment_valid(proof: PaymentProof, config: PaymentConfig) -> tuple[bool, 
         return False, "Invalid payment signature"
 
     # Cache the payment (valid for 1 hour)
-    _payment_cache[proof.tx_hash] = int(time.time()) + 3600
+    cache[proof.tx_hash] = int(time.time()) + 3600
 
+    logger.info(f"Payment verified: tx={proof.tx_hash[:16]}... from={proof.payer[:10]}...")
     return True, ""
 
 

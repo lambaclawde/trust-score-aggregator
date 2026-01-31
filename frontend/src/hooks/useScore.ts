@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api, SimpleScore, FullScore, Agent, FeedbackListResponse } from '../api/client'
+import { api } from '../api/client'
 
 export function useAgent(agentId: string | undefined) {
   return useQuery({

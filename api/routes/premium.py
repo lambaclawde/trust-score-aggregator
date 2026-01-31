@@ -1,15 +1,18 @@
-"""Premium API endpoints with x402 payment requirement."""
+"""Premium API endpoints with x402 payment requirement - Production Ready."""
 
+import logging
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ..middleware.x402 import x402_required
-from indexer.models.database import Agent, Feedback, get_session, get_engine
+from ..utils.validation import validate_agent_id
+from indexer.models.database import Agent, Feedback, ComputedScore, get_session, get_engine
 from indexer.models.schemas import AgentSchema, FeedbackSchema
 from scoring.base.aggregator import TrustScoreAggregator
 from ..config import settings
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/v1/premium", tags=["premium"])
 
 # Lazy engine initialization
@@ -76,26 +79,29 @@ async def get_full_score(request: Request, agent_id: str):
 
     Requires x402 payment of 0.0001 ETH.
     """
+    # Validate agent ID
+    validated_id = validate_agent_id(agent_id)
+
     engine = get_db_engine()
     session = get_session(engine)
     aggregator = get_aggregator()
 
     try:
         # Verify agent exists
-        agent = session.query(Agent).filter_by(id=agent_id).first()
+        agent = session.query(Agent).filter_by(id=validated_id).first()
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
 
         # Get feedback for this agent
         feedback_list = (
             session.query(Feedback)
-            .filter(Feedback.subject == agent_id, Feedback.revoked == False)
+            .filter(Feedback.subject == validated_id, Feedback.revoked == False)
             .all()
         )
 
         if not feedback_list:
             return FullScoreResponse(
-                agent_id=agent_id,
+                agent_id=validated_id,
                 overall_score=0.0,
                 confidence=0.0,
                 feedback_count=0,
@@ -105,8 +111,8 @@ async def get_full_score(request: Request, agent_id: str):
             )
 
         # Calculate scores
-        overall = aggregator.compute_score(agent_id)
-        categories = aggregator.compute_category_scores(agent_id)
+        overall = aggregator.compute_score(validated_id)
+        categories = aggregator.compute_category_scores(validated_id)
 
         # Calculate percentile (rank among all agents)
         all_agents = session.query(Agent).count()
@@ -126,7 +132,7 @@ async def get_full_score(request: Request, agent_id: str):
                 recent_trend = "down"
 
         return FullScoreResponse(
-            agent_id=agent_id,
+            agent_id=validated_id,
             overall_score=overall,
             confidence=min(1.0, len(feedback_list) / 10),
             feedback_count=len(feedback_list),
@@ -156,14 +162,22 @@ async def batch_scores(request: Request, body: BatchScoreRequest):
     not_found = []
 
     for agent_id in body.agent_ids:
+        # Validate each agent ID
         try:
-            score = aggregator.compute_score(agent_id)
-            scores[agent_id] = score if score > 0 else None
-            if score == 0:
-                not_found.append(agent_id)
-        except Exception:
+            validated_id = validate_agent_id(agent_id)
+        except HTTPException:
             not_found.append(agent_id)
             scores[agent_id] = None
+            continue
+
+        try:
+            score = aggregator.compute_score(validated_id)
+            scores[validated_id] = score if score > 0 else None
+            if score == 0:
+                not_found.append(validated_id)
+        except Exception:
+            not_found.append(validated_id)
+            scores[validated_id] = None
 
     return BatchScoreResponse(scores=scores, not_found=not_found)
 
@@ -178,47 +192,35 @@ async def get_leaderboard(
     """Get top agents ranked by trust score.
 
     Requires x402 payment of 0.0002 ETH.
+    Uses pre-computed scores from the database for performance.
     """
     engine = get_db_engine()
     session = get_session(engine)
-    aggregator = get_aggregator()
 
     try:
-        # Get all agents with feedback
-        agents = session.query(Agent).all()
-        total = len(agents)
+        # Use pre-computed scores for performance (computed by scoring engine)
+        from sqlalchemy import desc
 
-        # Calculate scores for all agents (in production, this would be cached)
-        scored_agents = []
-        for agent in agents:
-            feedback_count = (
-                session.query(Feedback)
-                .filter(Feedback.subject == agent.id, Feedback.revoked == False)
-                .count()
-            )
-            if feedback_count > 0:
-                score = aggregator.compute_score(agent.id)
-                scored_agents.append({
-                    "agent": agent,
-                    "score": score,
-                    "feedback_count": feedback_count,
-                })
+        # Join ComputedScore with Agent to get owner info
+        scored_query = (
+            session.query(ComputedScore, Agent)
+            .join(Agent, ComputedScore.agent_id == Agent.id)
+            .filter(ComputedScore.feedback_count > 0)
+            .order_by(desc(ComputedScore.overall_score))
+        )
 
-        # Sort by score descending
-        scored_agents.sort(key=lambda x: x["score"], reverse=True)
-
-        # Apply pagination
-        paginated = scored_agents[offset:offset + limit]
+        total = scored_query.count()
+        results = scored_query.offset(offset).limit(limit).all()
 
         entries = [
             LeaderboardEntry(
                 rank=offset + i + 1,
-                agent_id=item["agent"].id,
-                owner=item["agent"].owner,
-                score=item["score"],
-                feedback_count=item["feedback_count"],
+                agent_id=score.agent_id,
+                owner=agent.owner,
+                score=score.overall_score,
+                feedback_count=score.feedback_count,
             )
-            for i, item in enumerate(paginated)
+            for i, (score, agent) in enumerate(results)
         ]
 
         from datetime import datetime
@@ -238,17 +240,20 @@ async def get_agent_analytics(request: Request, agent_id: str):
 
     Requires x402 payment of 0.0003 ETH.
     """
+    # Validate agent ID
+    validated_id = validate_agent_id(agent_id)
+
     engine = get_db_engine()
     session = get_session(engine)
 
     try:
-        agent = session.query(Agent).filter_by(id=agent_id).first()
+        agent = session.query(Agent).filter_by(id=validated_id).first()
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
 
         feedback_list = (
             session.query(Feedback)
-            .filter(Feedback.subject == agent_id)
+            .filter(Feedback.subject == validated_id)
             .order_by(Feedback.timestamp.desc())
             .all()
         )
@@ -273,7 +278,7 @@ async def get_agent_analytics(request: Request, agent_id: str):
         last_30d = len([f for f in feedback_list if f.timestamp and (now - f.timestamp).days < 30])
 
         return {
-            "agent_id": agent_id,
+            "agent_id": validated_id,
             "owner": agent.owner,
             "registered_block": agent.block_number,
             "feedback": {
