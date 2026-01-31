@@ -1,302 +1,76 @@
-"""Premium API endpoints with x402 payment requirement - Production Ready."""
+"""Premium API endpoints - Stub Implementation.
+
+This module provides stub endpoints that return upgrade messages.
+For actual premium features, install the trust-score-premium package.
+"""
 
 import logging
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel
-
-from ..middleware.x402 import x402_required
-from ..utils.validation import validate_agent_id
-from indexer.models.database import Agent, Feedback, ComputedScore, get_session, get_engine
-from indexer.models.schemas import AgentSchema, FeedbackSchema
-from scoring.base.aggregator import TrustScoreAggregator
-from ..config import settings
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/v1/premium", tags=["premium"])
 
-# Lazy engine initialization
-_engine = None
-_aggregator = None
+# Try to import premium routes
+try:
+    from trust_score_premium.api.premium import router as _premium_router
+    router = _premium_router
+    PREMIUM_AVAILABLE = True
+    logger.info("Premium API routes loaded")
+except ImportError:
+    PREMIUM_AVAILABLE = False
+    logger.info("Premium API not available - using stubs")
 
+    # Create stub router
+    router = APIRouter(prefix="/v1/premium", tags=["premium"])
 
-def get_db_engine():
-    global _engine
-    if _engine is None:
-        _engine = get_engine(settings.database_url)
-    return _engine
-
-
-def get_aggregator():
-    global _aggregator
-    if _aggregator is None:
-        _aggregator = TrustScoreAggregator(get_db_engine())
-    return _aggregator
-
-
-class FullScoreResponse(BaseModel):
-    """Full trust score with breakdown."""
-    agent_id: str
-    overall_score: float
-    confidence: float
-    feedback_count: int
-    categories: dict[str, float]
-    recent_trend: str  # "up", "down", "stable"
-    percentile: float  # Rank among all agents
-
-
-class BatchScoreRequest(BaseModel):
-    """Batch score lookup request."""
-    agent_ids: list[str]
-
-
-class BatchScoreResponse(BaseModel):
-    """Batch score lookup response."""
-    scores: dict[str, Optional[float]]
-    not_found: list[str]
-
-
-class LeaderboardEntry(BaseModel):
-    """Leaderboard entry."""
-    rank: int
-    agent_id: str
-    owner: str
-    score: float
-    feedback_count: int
-
-
-class LeaderboardResponse(BaseModel):
-    """Leaderboard response."""
-    entries: list[LeaderboardEntry]
-    total_agents: int
-    updated_at: str
-
-
-@router.get("/agents/{agent_id}/score/full", response_model=FullScoreResponse)
-@x402_required(price_eth="0.0001")
-async def get_full_score(request: Request, agent_id: str):
-    """Get full trust score with category breakdown.
-
-    Requires x402 payment of 0.0001 ETH.
-    """
-    # Validate agent ID
-    validated_id = validate_agent_id(agent_id)
-
-    engine = get_db_engine()
-    session = get_session(engine)
-    aggregator = get_aggregator()
-
-    try:
-        # Verify agent exists
-        agent = session.query(Agent).filter_by(id=validated_id).first()
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-
-        # Get feedback for this agent
-        feedback_list = (
-            session.query(Feedback)
-            .filter(Feedback.subject == validated_id, Feedback.revoked == False)
-            .all()
+    @router.get("/agents/{agent_id}/score/full")
+    async def get_full_score_stub(request: Request, agent_id: str):
+        """Get full trust score - requires premium."""
+        return JSONResponse(
+            status_code=402,
+            content={
+                "error": "Premium Feature",
+                "message": "Full score breakdown requires the premium package",
+                "endpoint": "/v1/premium/agents/{id}/score/full",
+                "upgrade": "Install trust-score-premium for this feature",
+            }
         )
 
-        if not feedback_list:
-            return FullScoreResponse(
-                agent_id=validated_id,
-                overall_score=0.0,
-                confidence=0.0,
-                feedback_count=0,
-                categories={},
-                recent_trend="stable",
-                percentile=0.0,
-            )
-
-        # Calculate scores
-        overall = aggregator.compute_score(validated_id)
-        categories = aggregator.compute_category_scores(validated_id)
-
-        # Calculate percentile (rank among all agents)
-        all_agents = session.query(Agent).count()
-        agents_with_lower = 0  # Would need to compute all scores
-        percentile = 50.0  # Placeholder
-
-        # Determine trend (compare recent vs older feedback)
-        recent_trend = "stable"
-        if len(feedback_list) >= 5:
-            recent = feedback_list[:len(feedback_list)//2]
-            older = feedback_list[len(feedback_list)//2:]
-            recent_avg = sum(f.value for f in recent) / len(recent)
-            older_avg = sum(f.value for f in older) / len(older)
-            if recent_avg > older_avg * 1.1:
-                recent_trend = "up"
-            elif recent_avg < older_avg * 0.9:
-                recent_trend = "down"
-
-        return FullScoreResponse(
-            agent_id=validated_id,
-            overall_score=overall,
-            confidence=min(1.0, len(feedback_list) / 10),
-            feedback_count=len(feedback_list),
-            categories=categories,
-            recent_trend=recent_trend,
-            percentile=percentile,
-        )
-    finally:
-        session.close()
-
-
-@router.post("/batch/scores", response_model=BatchScoreResponse)
-@x402_required(price_eth="0.0005")  # Higher price for batch
-async def batch_scores(request: Request, body: BatchScoreRequest):
-    """Get trust scores for multiple agents in one request.
-
-    Requires x402 payment of 0.0005 ETH.
-    Max 50 agents per request.
-    """
-    if len(body.agent_ids) > 50:
-        raise HTTPException(status_code=400, detail="Max 50 agents per batch")
-
-    engine = get_db_engine()
-    aggregator = get_aggregator()
-
-    scores = {}
-    not_found = []
-
-    for agent_id in body.agent_ids:
-        # Validate each agent ID
-        try:
-            validated_id = validate_agent_id(agent_id)
-        except HTTPException:
-            not_found.append(agent_id)
-            scores[agent_id] = None
-            continue
-
-        try:
-            score = aggregator.compute_score(validated_id)
-            scores[validated_id] = score if score > 0 else None
-            if score == 0:
-                not_found.append(validated_id)
-        except Exception:
-            not_found.append(validated_id)
-            scores[validated_id] = None
-
-    return BatchScoreResponse(scores=scores, not_found=not_found)
-
-
-@router.get("/leaderboard", response_model=LeaderboardResponse)
-@x402_required(price_eth="0.0002")
-async def get_leaderboard(
-    request: Request,
-    limit: int = Query(100, ge=1, le=500),
-    offset: int = Query(0, ge=0),
-):
-    """Get top agents ranked by trust score.
-
-    Requires x402 payment of 0.0002 ETH.
-    Uses pre-computed scores from the database for performance.
-    """
-    engine = get_db_engine()
-    session = get_session(engine)
-
-    try:
-        # Use pre-computed scores for performance (computed by scoring engine)
-        from sqlalchemy import desc
-
-        # Join ComputedScore with Agent to get owner info
-        scored_query = (
-            session.query(ComputedScore, Agent)
-            .join(Agent, ComputedScore.agent_id == Agent.id)
-            .filter(ComputedScore.feedback_count > 0)
-            .order_by(desc(ComputedScore.overall_score))
+    @router.post("/batch/scores")
+    async def batch_scores_stub(request: Request):
+        """Batch score lookup - requires premium."""
+        return JSONResponse(
+            status_code=402,
+            content={
+                "error": "Premium Feature",
+                "message": "Batch score lookup requires the premium package",
+                "endpoint": "/v1/premium/batch/scores",
+                "upgrade": "Install trust-score-premium for this feature",
+            }
         )
 
-        total = scored_query.count()
-        results = scored_query.offset(offset).limit(limit).all()
-
-        entries = [
-            LeaderboardEntry(
-                rank=offset + i + 1,
-                agent_id=score.agent_id,
-                owner=agent.owner,
-                score=score.overall_score,
-                feedback_count=score.feedback_count,
-            )
-            for i, (score, agent) in enumerate(results)
-        ]
-
-        from datetime import datetime
-        return LeaderboardResponse(
-            entries=entries,
-            total_agents=total,
-            updated_at=datetime.utcnow().isoformat(),
-        )
-    finally:
-        session.close()
-
-
-@router.get("/agents/{agent_id}/analytics")
-@x402_required(price_eth="0.0003")
-async def get_agent_analytics(request: Request, agent_id: str):
-    """Get detailed analytics for an agent.
-
-    Requires x402 payment of 0.0003 ETH.
-    """
-    # Validate agent ID
-    validated_id = validate_agent_id(agent_id)
-
-    engine = get_db_engine()
-    session = get_session(engine)
-
-    try:
-        agent = session.query(Agent).filter_by(id=validated_id).first()
-        if not agent:
-            raise HTTPException(status_code=404, detail="Agent not found")
-
-        feedback_list = (
-            session.query(Feedback)
-            .filter(Feedback.subject == validated_id)
-            .order_by(Feedback.timestamp.desc())
-            .all()
+    @router.get("/leaderboard")
+    async def get_leaderboard_stub(request: Request):
+        """Leaderboard - requires premium."""
+        return JSONResponse(
+            status_code=402,
+            content={
+                "error": "Premium Feature",
+                "message": "Leaderboard requires the premium package",
+                "endpoint": "/v1/premium/leaderboard",
+                "upgrade": "Install trust-score-premium for this feature",
+            }
         )
 
-        # Calculate analytics
-        total = len(feedback_list)
-        active = len([f for f in feedback_list if not f.revoked])
-        revoked = total - active
-
-        positive = len([f for f in feedback_list if f.value > 0 and not f.revoked])
-        negative = len([f for f in feedback_list if f.value < 0 and not f.revoked])
-        neutral = active - positive - negative
-
-        # Get unique reviewers
-        reviewers = set(f.author for f in feedback_list)
-
-        # Time-based stats
-        from datetime import datetime, timedelta
-        now = datetime.utcnow()
-        last_24h = len([f for f in feedback_list if f.timestamp and (now - f.timestamp).days < 1])
-        last_7d = len([f for f in feedback_list if f.timestamp and (now - f.timestamp).days < 7])
-        last_30d = len([f for f in feedback_list if f.timestamp and (now - f.timestamp).days < 30])
-
-        return {
-            "agent_id": validated_id,
-            "owner": agent.owner,
-            "registered_block": agent.block_number,
-            "feedback": {
-                "total": total,
-                "active": active,
-                "revoked": revoked,
-                "positive": positive,
-                "negative": negative,
-                "neutral": neutral,
-            },
-            "reviewers": {
-                "unique_count": len(reviewers),
-            },
-            "activity": {
-                "last_24h": last_24h,
-                "last_7d": last_7d,
-                "last_30d": last_30d,
-            },
-        }
-    finally:
-        session.close()
+    @router.get("/agents/{agent_id}/analytics")
+    async def get_analytics_stub(request: Request, agent_id: str):
+        """Agent analytics - requires premium."""
+        return JSONResponse(
+            status_code=402,
+            content={
+                "error": "Premium Feature",
+                "message": "Agent analytics requires the premium package",
+                "endpoint": "/v1/premium/agents/{id}/analytics",
+                "upgrade": "Install trust-score-premium for this feature",
+            }
+        )
