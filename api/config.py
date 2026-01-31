@@ -25,6 +25,15 @@ class APISettings(BaseSettings):
     # CORS
     cors_origins: list[str] = ["*"]
 
+    # Chain configuration
+    chain_id: int = int(os.getenv("CHAIN_ID", "11155111"))
+
+    # x402 Payment configuration
+    payment_recipient: str = os.getenv(
+        "PAYMENT_RECIPIENT", "0x266C3434C2a723939836F109FE01Bcfb96346c88"
+    )
+    payment_price_eth: str = os.getenv("PAYMENT_PRICE_ETH", "0.0001")
+
     class Config:
         env_prefix = ""
 

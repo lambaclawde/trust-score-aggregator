@@ -9,7 +9,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .middleware.rate_limit import limiter
-from .routes import health_router, agents_router, scores_router, badge_router
+from .routes import health_router, agents_router, scores_router, badge_router, premium_router
 from indexer.models.database import init_db
 
 
@@ -58,6 +58,7 @@ app.include_router(health_router)
 app.include_router(agents_router)
 app.include_router(scores_router)
 app.include_router(badge_router)
+app.include_router(premium_router)  # x402 paid endpoints
 
 
 def run():

@@ -72,9 +72,7 @@ async def get_score(request: Request, agent_id: str):
     session = get_session(engine)
 
     try:
-        # Normalize ID format
-        if not agent_id.startswith("0x"):
-            agent_id = "0x" + agent_id
+        # Agent IDs are plain integers
 
         computed = session.query(ComputedScore).filter_by(agent_id=agent_id).first()
 
@@ -109,9 +107,7 @@ async def get_full_score(request: Request, agent_id: str):
     session = get_session(engine)
 
     try:
-        # Normalize ID format
-        if not agent_id.startswith("0x"):
-            agent_id = "0x" + agent_id
+        # Agent IDs are plain integers
 
         computed = session.query(ComputedScore).filter_by(agent_id=agent_id).first()
 
