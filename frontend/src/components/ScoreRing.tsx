@@ -9,17 +9,17 @@ interface ScoreRingProps {
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 80) return '#10b981' // excellent - emerald
-  if (score >= 60) return '#34d399' // good - emerald lighter
-  if (score >= 40) return '#6b7280' // neutral - gray
-  if (score >= 20) return '#f59e0b' // poor - amber
-  return '#ef4444' // bad - red
+  if (score >= 80) return '#10b981' // emerald-500
+  if (score >= 60) return '#22c55e' // green-500
+  if (score >= 40) return '#f59e0b' // amber-500
+  if (score >= 20) return '#f97316' // orange-500
+  return '#ef4444' // red-500
 }
 
 function getScoreLabel(score: number): string {
   if (score >= 80) return 'Excellent'
   if (score >= 60) return 'Good'
-  if (score >= 40) return 'Neutral'
+  if (score >= 40) return 'Moderate'
   if (score >= 20) return 'Poor'
   return 'Risky'
 }
@@ -39,7 +39,7 @@ export default function ScoreRing({ score, size = 'md', showLabel = true, animat
   const label = getScoreLabel(score)
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-center gap-3">
       <div className="relative" style={{ width: config.size, height: config.size }}>
         <svg
           width={config.size}
@@ -54,7 +54,7 @@ export default function ScoreRing({ score, size = 'md', showLabel = true, animat
             fill="none"
             stroke="currentColor"
             strokeWidth={config.stroke}
-            className="text-surface-700"
+            className="text-surface-200 dark:text-surface-800"
           />
           {/* Score ring */}
           <motion.circle
@@ -82,18 +82,26 @@ export default function ScoreRing({ score, size = 'md', showLabel = true, animat
           >
             {Math.round(score)}
           </motion.span>
+          {size === 'lg' && (
+            <span className="text-xs text-surface-500 dark:text-surface-400 mt-1">/ 100</span>
+          )}
         </div>
       </div>
       {showLabel && (
-        <motion.span
-          className="text-sm font-medium"
-          style={{ color }}
+        <motion.div
+          className="flex flex-col items-center"
           initial={animated ? { opacity: 0 } : {}}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5 }}
         >
-          {label}
-        </motion.span>
+          <span
+            className="text-sm font-semibold"
+            style={{ color }}
+          >
+            {label}
+          </span>
+          <span className="text-xs text-surface-500 dark:text-surface-400">Trust Score</span>
+        </motion.div>
       )}
     </div>
   )

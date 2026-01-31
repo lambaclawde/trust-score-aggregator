@@ -34,8 +34,8 @@ export default function Agent() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-12 h-12 border-2 border-accent-600 border-t-transparent rounded-full animate-spin" />
-            <p className="text-gray-400">Loading agent data...</p>
+            <div className="w-12 h-12 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+            <p className="text-surface-500 dark:text-surface-400">Loading agent data...</p>
           </div>
         </div>
       </div>
@@ -47,13 +47,13 @@ export default function Agent() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         <div className="flex items-center justify-center min-h-[60vh]">
           <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/10 flex items-center justify-center">
-              <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-red-50 dark:bg-red-950 flex items-center justify-center">
+              <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
-            <h2 className="text-xl font-semibold mb-2">Agent Not Found</h2>
-            <p className="text-gray-400 mb-6">
+            <h2 className="text-xl font-semibold text-surface-900 dark:text-white mb-2">Agent Not Found</h2>
+            <p className="text-surface-600 dark:text-surface-400 mb-6">
               No trust score data found for this agent ID.
             </p>
             <Link to="/lookup" className="btn-primary">
@@ -79,15 +79,22 @@ export default function Agent() {
       >
         <Link
           to="/lookup"
-          className="inline-flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-4"
+          className="inline-flex items-center gap-2 text-surface-500 dark:text-surface-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors mb-4"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           Back to Lookup
         </Link>
-        <h1 className="text-3xl font-bold mb-2">Agent Trust Score</h1>
-        <AddressDisplay address={id!} className="text-gray-400" />
+        <div className="flex items-start justify-between flex-wrap gap-4">
+          <div>
+            <span className="badge badge-primary mb-3">Agent Profile</span>
+            <h1 className="text-display-sm font-bold text-surface-900 dark:text-white mb-2">
+              Trust Score Analysis
+            </h1>
+            <AddressDisplay address={id!} className="text-surface-500 dark:text-surface-400" />
+          </div>
+        </div>
       </motion.div>
 
       <div className="grid lg:grid-cols-3 gap-6">
@@ -99,12 +106,14 @@ export default function Agent() {
           transition={{ delay: 0.1 }}
         >
           <ScoreRing score={score.overall_score} size="lg" />
-          <p className="text-sm text-gray-500 mt-4">
-            Based on {score.feedback_count} reviews
-          </p>
-          <p className="text-xs text-gray-600 mt-1">
-            Last updated: {new Date(score.computed_at).toLocaleDateString()}
-          </p>
+          <div className="mt-6 text-center">
+            <p className="text-sm text-surface-500 dark:text-surface-400">
+              Based on {score.feedback_count} reviews
+            </p>
+            <p className="text-xs text-surface-400 dark:text-surface-500 mt-1">
+              Last updated: {new Date(score.computed_at).toLocaleDateString()}
+            </p>
+          </div>
         </motion.div>
 
         {/* Stats */}
@@ -114,7 +123,7 @@ export default function Agent() {
             value={score.feedback_count}
             sublabel="All-time reviews"
             icon={
-              <svg className="w-5 h-5 text-accent-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-5 h-5 text-primary-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
             }
@@ -134,7 +143,7 @@ export default function Agent() {
                 value={`${agent.owner.slice(0, 8)}...`}
                 sublabel="Wallet address"
                 icon={
-                  <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg className="w-5 h-5 text-surface-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 }
@@ -152,14 +161,14 @@ export default function Agent() {
       </div>
 
       {/* Categories */}
-      {score.categories.length > 0 && (
+      {score.categories && score.categories.length > 0 && (
         <motion.div
           className="mt-8 card p-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4 }}
         >
-          <h3 className="text-lg font-semibold mb-6">Score by Category</h3>
+          <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-6">Score by Category</h3>
           <div className="space-y-5">
             {score.categories.map((cat, i) => (
               <CategoryBar
@@ -175,37 +184,47 @@ export default function Agent() {
       )}
 
       {/* Recent feedback */}
-      {feedbackData && feedbackData.feedback.length > 0 && (
+      {feedbackData && feedbackData.feedback && feedbackData.feedback.length > 0 && (
         <motion.div
           className="mt-8 card overflow-hidden"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.5 }}
         >
-          <div className="px-6 py-4 border-b border-surface-600">
-            <h3 className="text-lg font-semibold">Recent Feedback</h3>
+          <div className="px-6 py-4 border-b border-surface-200 dark:border-surface-800">
+            <h3 className="text-lg font-semibold text-surface-900 dark:text-white">Recent Feedback</h3>
           </div>
-          <div className="divide-y divide-surface-700">
+          <div className="divide-y divide-surface-100 dark:divide-surface-800">
             {feedbackData.feedback.slice(0, 10).map((fb) => (
-              <div key={fb.id} className="px-6 py-4">
+              <div key={fb.id} className="px-6 py-4 hover:bg-surface-50 dark:hover:bg-surface-800/50 transition-colors">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-1">
                       <span className={clsx(
-                        'font-mono font-medium',
-                        fb.value > 0 ? 'text-emerald-400' : fb.value < 0 ? 'text-red-400' : 'text-gray-400'
+                        'inline-flex items-center gap-1 font-mono font-semibold text-sm',
+                        fb.value > 0 ? 'text-emerald-500' : fb.value < 0 ? 'text-red-500' : 'text-surface-400'
                       )}>
+                        {fb.value > 0 && (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                          </svg>
+                        )}
+                        {fb.value < 0 && (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                          </svg>
+                        )}
                         {fb.value > 0 ? '+' : ''}{fb.value}
                       </span>
-                      <span className="text-xs text-gray-500">
-                        from {fb.author.slice(0, 10)}...
+                      <span className="text-xs text-surface-400 dark:text-surface-500">
+                        from <span className="font-mono">{fb.author.slice(0, 10)}...</span>
                       </span>
                     </div>
                     {fb.comment && (
-                      <p className="text-sm text-gray-400">{fb.comment}</p>
+                      <p className="text-sm text-surface-600 dark:text-surface-400">{fb.comment}</p>
                     )}
                   </div>
-                  <span className="text-xs text-gray-600">
+                  <span className="text-xs text-surface-400 dark:text-surface-500 flex-shrink-0 ml-4">
                     {new Date(fb.timestamp).toLocaleDateString()}
                   </span>
                 </div>
@@ -222,12 +241,23 @@ export default function Agent() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.6 }}
       >
-        <h3 className="text-lg font-semibold mb-4">Embed Badge</h3>
-        <p className="text-sm text-gray-400 mb-4">
-          Add this badge to your website to display this agent's trust score.
-        </p>
-        <div className="bg-surface-900 rounded-lg p-4 font-mono text-sm text-gray-300 overflow-x-auto">
-          <code>{`<img src="https://trustscore.api/badge/${id}" alt="Trust Score" />`}</code>
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950 flex items-center justify-center text-primary-600 dark:text-primary-400 flex-shrink-0">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-2">Embed Badge</h3>
+            <p className="text-sm text-surface-600 dark:text-surface-400 mb-4">
+              Add this badge to your website to display this agent's trust score.
+            </p>
+            <div className="code-block">
+              <code className="text-surface-700 dark:text-surface-300 text-sm">
+                {`<img src="https://api.trustscore.xyz/badge/${id}" alt="Trust Score" />`}
+              </code>
+            </div>
+          </div>
         </div>
       </motion.div>
     </div>

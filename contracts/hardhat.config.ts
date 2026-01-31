@@ -10,12 +10,13 @@ const RPC_URL = process.env.RPC_URL || "https://eth.llamarpc.com";
 
 const config: HardhatUserConfig = {
   solidity: {
-    version: "0.8.20",
+    version: "0.8.22",
     settings: {
       optimizer: {
         enabled: true,
         runs: 200,
       },
+      viaIR: true,
     },
   },
   networks: {
@@ -52,7 +53,7 @@ const config: HardhatUserConfig = {
     },
   },
   paths: {
-    sources: "./",
+    sources: "./contracts",
     tests: "./test",
     cache: "./cache",
     artifacts: "./artifacts",
