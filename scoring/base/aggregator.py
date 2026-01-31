@@ -146,6 +146,9 @@ class TrustScoreAggregator:
                 session.add(computed)
 
             session.commit()
+            # Refresh to load data, then expunge to detach from session
+            session.refresh(computed)
+            session.expunge(computed)
             logger.info(f"Saved score for {agent_id}: {score}")
             return computed
         except Exception as e:
