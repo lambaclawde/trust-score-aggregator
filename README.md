@@ -9,7 +9,6 @@ An open-source trust score aggregation system for ERC-8004 agents on Ethereum. I
 - **REST API**: Query agent trust scores programmatically
 - **Premium API**: x402 payment-gated advanced endpoints
 - **On-chain Oracle**: Smart contract for paid score queries
-- **Frontend**: Score lookup, leaderboard, and API documentation
 
 ## Architecture
 
@@ -26,10 +25,6 @@ Ethereum Mainnet (ERC-8004 Registries)
    v           v      v
 Scoring     REST    Oracle
 Engine      API     Updater
-              |
-              v
-          Frontend
-       (React + Vite)
 ```
 
 ## Quick Start
@@ -74,16 +69,6 @@ python scripts/start_api.py
 ```
 
 API available at `http://localhost:8000`.
-
-### Run the Frontend
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Frontend available at `http://localhost:3000`.
 
 ## API Endpoints
 
