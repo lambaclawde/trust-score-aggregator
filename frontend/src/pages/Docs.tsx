@@ -31,7 +31,7 @@ const endpoints = [
     method: 'GET',
     path: '/v1/agents/{id}/score/full',
     description: 'Get full score with category breakdown',
-    tier: 'premium',
+    tier: '0.0001 ETH',
     response: `{
   "agent_id": "0x1234...",
   "overall_score": 85.5,
@@ -68,7 +68,7 @@ const endpoints = [
     method: 'POST',
     path: '/v1/batch/scores',
     description: 'Get scores for multiple agents',
-    tier: 'premium',
+    tier: '0.0005 ETH',
     body: `{ "agent_ids": ["0x1234...", "0x5678..."] }`,
     response: `{
   "scores": [
@@ -114,51 +114,40 @@ contract MyProtocol {
     }
 }`
 
-const tiers = [
+// x402 Pay-per-request pricing
+const premiumEndpoints = [
   {
-    name: 'Free',
-    price: '$0',
-    requests: '100/day',
-    features: [
-      'Basic score lookup',
-      'Agent info',
-      'Feedback history',
-      'Community support',
-    ],
-    highlighted: false,
-    cta: 'Get Started',
+    name: 'Full Score',
+    endpoint: '/v1/premium/agents/{id}/score/full',
+    price: '0.0001',
+    description: 'Complete score with category breakdown',
   },
   {
-    name: 'Pro',
-    price: '$29',
-    period: '/mo',
-    requests: '10,000/day',
-    features: [
-      'Everything in Free',
-      'Full score breakdown',
-      'Category analysis',
-      'Batch queries (up to 50)',
-      'Priority support',
-    ],
-    highlighted: true,
-    cta: 'Start Pro Trial',
+    name: 'Batch Scores',
+    endpoint: '/v1/premium/batch/scores',
+    price: '0.0005',
+    description: 'Up to 50 agents per request',
   },
   {
-    name: 'Enterprise',
-    price: '$199',
-    period: '/mo',
-    requests: '100,000/day',
-    features: [
-      'Everything in Pro',
-      'Unlimited batch queries',
-      'Custom webhooks',
-      'Dedicated support',
-      'SLA guarantee',
-      'Custom integrations',
-    ],
-    highlighted: false,
-    cta: 'Contact Sales',
+    name: 'Leaderboard',
+    endpoint: '/v1/premium/leaderboard',
+    price: '0.0002',
+    description: 'Ranked agents by trust score',
   },
+  {
+    name: 'Analytics',
+    endpoint: '/v1/premium/agents/{id}/analytics',
+    price: '0.0003',
+    description: 'Detailed analytics and trends',
+  },
+]
+
+const freeEndpoints = [
+  '/v1/agents/{id} - Agent info',
+  '/v1/agents/{id}/score - Basic score',
+  '/v1/agents/{id}/feedback - Feedback history',
+  '/v1/leaderboard - Basic leaderboard',
+  '/v1/agents/stats - Global statistics',
 ]
 
 export default function Docs() {
@@ -240,8 +229,8 @@ export default function Docs() {
                   https://api.trustscore.xyz/v1
                 </code>
                 <p className="text-sm text-surface-500 dark:text-surface-400 mt-3">
-                  All requests require an <code className="text-surface-700 dark:text-surface-300 font-mono">X-API-Key</code> header for premium endpoints.
-                  Free tier endpoints are accessible without authentication up to the rate limit.
+                  Premium endpoints require x402 payment. Include <code className="text-surface-700 dark:text-surface-300 font-mono">X-Payment: 0x&lt;tx_hash&gt;:1</code> header after sending ETH.
+                  Free tier endpoints are accessible without payment up to 100 requests/day.
                 </p>
               </div>
             </div>
@@ -270,7 +259,7 @@ export default function Docs() {
                   </div>
                   <span className={clsx(
                     'badge',
-                    endpoint.tier === 'free' ? 'badge-success' : 'badge-warning'
+                    endpoint.tier === 'free' ? 'badge-success' : 'badge-primary'
                   )}>
                     {endpoint.tier}
                   </span>
@@ -378,76 +367,168 @@ export default function Docs() {
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
+          className="space-y-8"
         >
-          <div className="grid md:grid-cols-3 gap-6">
-            {tiers.map((tier, i) => (
-              <motion.div
-                key={tier.name}
-                className={clsx(
-                  'card p-6 relative',
-                  tier.highlighted && 'ring-2 ring-primary-500'
-                )}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.1 }}
-              >
-                {tier.highlighted && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 badge badge-primary">
-                    Most Popular
-                  </span>
-                )}
-                <div className="mb-6">
-                  <h3 className="text-xl font-semibold text-surface-900 dark:text-white">{tier.name}</h3>
-                  <div className="mt-2 flex items-baseline">
-                    <span className="text-3xl font-bold text-surface-900 dark:text-white">{tier.price}</span>
-                    {tier.period && (
-                      <span className="text-surface-500 dark:text-surface-400 ml-1">{tier.period}</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-surface-500 dark:text-surface-400 mt-1">{tier.requests}</p>
-                </div>
-                <ul className="space-y-3 mb-6">
-                  {tier.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-3 text-sm text-surface-600 dark:text-surface-400">
-                      <svg className="w-5 h-5 text-primary-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                      </svg>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <button className={clsx(
-                  'w-full',
-                  tier.highlighted ? 'btn-primary' : 'btn-secondary'
-                )}>
-                  {tier.cta}
-                </button>
-              </motion.div>
-            ))}
-          </div>
-
-          <motion.div
-            className="mt-12 card p-6"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          {/* x402 Intro */}
+          <div className="card p-6">
             <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white flex-shrink-0">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-2">On-chain Queries</h3>
+                <h3 className="text-xl font-semibold text-surface-900 dark:text-white mb-2">
+                  x402 Pay-Per-Request
+                </h3>
+                <p className="text-surface-600 dark:text-surface-400 mb-4">
+                  No subscriptions, no API keys. Pay only for what you use with ETH micropayments.
+                  Send payment, include the tx hash in your request, and get instant access.
+                </p>
+                <div className="flex items-center gap-4 text-sm">
+                  <span className="badge badge-success">No Monthly Fees</span>
+                  <span className="badge badge-primary">Instant Access</span>
+                  <span className="badge badge-neutral">ETH Payments</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Free Tier */}
+            <motion.div
+              className="card p-6"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-surface-900 dark:text-white">Free Tier</h3>
+                  <p className="text-sm text-surface-500 dark:text-surface-400">100 requests/day</p>
+                </div>
+              </div>
+              <ul className="space-y-2">
+                {freeEndpoints.map((endpoint) => (
+                  <li key={endpoint} className="flex items-center gap-2 text-sm text-surface-600 dark:text-surface-400">
+                    <svg className="w-4 h-4 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    <code className="font-mono text-xs">{endpoint}</code>
+                  </li>
+                ))}
+              </ul>
+            </motion.div>
+
+            {/* Premium Pricing */}
+            <motion.div
+              className="card p-6 ring-2 ring-primary-500"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-primary-50 dark:bg-primary-950 flex items-center justify-center text-primary-600 dark:text-primary-400">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-surface-900 dark:text-white">Premium Endpoints</h3>
+                  <p className="text-sm text-surface-500 dark:text-surface-400">Pay per request</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {premiumEndpoints.map((ep) => (
+                  <div key={ep.endpoint} className="flex items-center justify-between py-2 border-b border-surface-200 dark:border-surface-800 last:border-0">
+                    <div>
+                      <p className="text-sm font-medium text-surface-900 dark:text-white">{ep.name}</p>
+                      <p className="text-xs text-surface-500 dark:text-surface-400">{ep.description}</p>
+                    </div>
+                    <span className="font-mono text-sm font-semibold text-primary-600 dark:text-primary-400">
+                      {ep.price} ETH
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+
+          {/* How it works */}
+          <motion.div
+            className="card p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-6">How x402 Payments Work</h3>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 mx-auto mb-3">
+                  <span className="font-bold">1</span>
+                </div>
+                <h4 className="font-medium text-surface-900 dark:text-white mb-2">Request Endpoint</h4>
+                <p className="text-sm text-surface-500 dark:text-surface-400">
+                  Call premium endpoint, receive 402 with payment address and amount
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 mx-auto mb-3">
+                  <span className="font-bold">2</span>
+                </div>
+                <h4 className="font-medium text-surface-900 dark:text-white mb-2">Send Payment</h4>
+                <p className="text-sm text-surface-500 dark:text-surface-400">
+                  Send ETH to payment address, wait for confirmation
+                </p>
+              </div>
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center text-primary-600 dark:text-primary-400 mx-auto mb-3">
+                  <span className="font-bold">3</span>
+                </div>
+                <h4 className="font-medium text-surface-900 dark:text-white mb-2">Include TX Hash</h4>
+                <p className="text-sm text-surface-500 dark:text-surface-400">
+                  Retry request with <code className="text-xs">X-Payment: 0x...txhash:1</code> header
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 p-4 bg-surface-50 dark:bg-surface-900 rounded-lg">
+              <p className="text-xs font-mono text-surface-600 dark:text-surface-400">
+                <span className="text-surface-500 dark:text-surface-500"># Example request with payment</span><br />
+                curl -H "X-Payment: 0xabc123...def:1" \<br />
+                &nbsp;&nbsp;&nbsp;&nbsp; https://api.trustscore.xyz/v1/premium/leaderboard
+              </p>
+            </div>
+          </motion.div>
+
+          {/* On-chain Oracle */}
+          <motion.div
+            className="card p-6"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-surface-900 dark:text-white mb-2">On-chain Oracle</h3>
                 <p className="text-surface-600 dark:text-surface-400 mb-4">
                   For smart contract integrations, query the TrustScoreOracle directly on Ethereum.
-                  Pay-per-query model with no subscription required.
+                  Pay-per-query model built into the contract.
                 </p>
                 <div className="flex items-baseline gap-2">
                   <span className="text-3xl font-bold text-surface-900 dark:text-white">0.001</span>
-                  <span className="text-surface-500 dark:text-surface-400">ETH per query</span>
+                  <span className="text-surface-500 dark:text-surface-400">ETH per on-chain query</span>
                 </div>
+                <p className="text-xs text-surface-500 dark:text-surface-400 mt-2">Coming soon</p>
               </div>
             </div>
           </motion.div>
